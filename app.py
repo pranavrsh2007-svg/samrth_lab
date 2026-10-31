@@ -12,8 +12,17 @@ from routes.api import api_bp
 from services.auth_service import get_current_user
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    # Anchor static and template folders explicitly to project root BASE_DIR
+    static_dir = os.path.join(Config.BASE_DIR, 'static')
+    template_dir = os.path.join(Config.BASE_DIR, 'templates')
+    app = Flask(
+        __name__,
+        static_folder=static_dir,
+        template_folder=template_dir,
+        static_url_path='/static'
+    )
     app.config.from_object(config_class)
+    app.url_map.strict_slashes = False
 
     # Ensure upload directory exists safely without crashing if filesystem is read-only
     upload_folder = app.config.get('UPLOAD_FOLDER')
@@ -41,8 +50,10 @@ def create_app(config_class=Config):
     # Teardown database connection
     app.teardown_appcontext(close_db)
 
-    # Root route
+    # Root route with index and serverless alias support
     @app.route('/')
+    @app.route('/index')
+    @app.route('/api/index')
     def index():
         if 'user_id' in session:
             role = session.get('role')
@@ -53,6 +64,15 @@ def create_app(config_class=Config):
             elif role == 'technician':
                 return redirect(url_for('technician.dashboard'))
         return redirect(url_for('auth.login'))
+
+    # Static files fallback route
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        return send_from_directory(app.static_folder, filename)
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return ('', 204)
 
     # Serve uploaded images (supports local files and redirects for remote persistent storage)
     @app.route('/uploads/<path:filename>')

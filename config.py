@@ -38,6 +38,7 @@ def resolve_database_path():
 IS_VERCEL = is_serverless_env()
 
 class Config:
+    BASE_DIR = BASE_DIR
     IS_VERCEL = is_serverless_env()
     SECRET_KEY = os.environ.get('SECRET_KEY', 'labfix-super-secret-key-prod-2026')
     DATABASE = resolve_database_path()

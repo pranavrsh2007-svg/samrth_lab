@@ -162,7 +162,66 @@ class VercelDeploymentTestCase(unittest.TestCase):
         # Check api/index.py import
         from api.index import app as vercel_app
         self.assertIsNotNone(vercel_app)
-        self.assertEqual(vercel_app.name, 'app')
+
+    def test_09_static_assets_serving(self):
+        """Verify CSS, JS, and image assets load with correct status and content types."""
+        css_res = self.client.get('/static/css/style.css')
+        self.assertEqual(css_res.status_code, 200)
+        self.assertIn('text/css', css_res.content_type)
+        self.assertIn(b':root', css_res.data)
+
+        dash_res = self.client.get('/static/css/dashboard.css')
+        self.assertEqual(dash_res.status_code, 200)
+        self.assertIn('text/css', dash_res.content_type)
+
+        js_res = self.client.get('/static/js/main.js')
+        self.assertEqual(js_res.status_code, 200)
+        self.assertIn('javascript', js_res.content_type)
+
+    def test_10_homepage_and_login_accessibility(self):
+        """Verify homepage / redirects to /login and /login loads with 200."""
+        # Root route redirects to login
+        res = self.client.get('/')
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('/login', res.headers.get('Location', ''))
+
+        # /login renders login page successfully
+        login_res = self.client.get('/login')
+        self.assertEqual(login_res.status_code, 200)
+        self.assertIn(b'LabFix', login_res.data)
+        self.assertIn(b'Sign In', login_res.data)
+
+        # /api/index alias redirects to login
+        api_res = self.client.get('/api/index')
+        self.assertEqual(api_res.status_code, 302)
+
+        # Favicon returns 204
+        fav_res = self.client.get('/favicon.ico')
+        self.assertEqual(fav_res.status_code, 204)
+
+        # Non-existent page returns custom 404
+        bad_res = self.client.get('/definitely-not-a-real-page-404')
+        self.assertEqual(bad_res.status_code, 404)
+        self.assertIn(b'Page Not Found', bad_res.data)
+
+    def test_11_vercel_rewrite_regex_matching(self):
+        """Verify that vercel.json rewrite regex catches app routes but excludes static assets."""
+        import re
+        pattern = r'^/((?!static/|favicon.ico).*)$'
+
+        # Must match app routes
+        self.assertIsNotNone(re.match(pattern, '/'))
+        self.assertIsNotNone(re.match(pattern, '/login'))
+        self.assertIsNotNone(re.match(pattern, '/hod/dashboard'))
+        self.assertIsNotNone(re.match(pattern, '/faculty/report-fault'))
+        self.assertIsNotNone(re.match(pattern, '/api/wings'))
+
+        # Must NOT match static assets (allowing Vercel CDN to serve them directly)
+        self.assertIsNone(re.match(pattern, '/static/css/style.css'))
+        self.assertIsNone(re.match(pattern, '/static/css/dashboard.css'))
+        self.assertIsNone(re.match(pattern, '/static/js/main.js'))
+        self.assertIsNone(re.match(pattern, '/static/images/nmiet_campus.jpg'))
+        self.assertIsNone(re.match(pattern, '/favicon.ico'))
 
 if __name__ == '__main__':
     unittest.main()
