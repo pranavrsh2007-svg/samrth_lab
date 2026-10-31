@@ -4,31 +4,62 @@ from flask import g
 from werkzeug.security import generate_password_hash
 from config import Config
 
-from flask import g, has_app_context
+from flask import g, has_app_context, current_app
+
+def _get_active_db_path():
+    """Gets the active database path from Flask config or Config fallback."""
+    if has_app_context() and 'DATABASE' in current_app.config:
+        db_path = current_app.config['DATABASE']
+    else:
+        db_path = Config.DATABASE
+
+    # If the database file does not exist in serverless /tmp environment
+    import tempfile
+    is_serverless_tmp = (getattr(Config, 'IS_VERCEL', False) or db_path.startswith(tempfile.gettempdir()))
+    if is_serverless_tmp and not os.path.exists(db_path):
+        bundled_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'labfix.db')
+        if os.path.exists(bundled_db) and os.path.abspath(db_path) != os.path.abspath(bundled_db):
+            try:
+                db_dir = os.path.dirname(db_path)
+                if db_dir:
+                    os.makedirs(db_dir, exist_ok=True)
+                import shutil
+                shutil.copy2(bundled_db, db_path)
+            except Exception:
+                pass
+    return db_path
 
 def get_db():
     """Opens a new database connection for the current app context, or a direct connection if standalone."""
+    db_path = _get_active_db_path()
+
     if has_app_context():
         if 'db' not in g:
             g.db = sqlite3.connect(
-                Config.DATABASE,
+                db_path,
                 timeout=30.0,
                 check_same_thread=False
             )
             g.db.row_factory = sqlite3.Row
             g.db.execute("PRAGMA foreign_keys = ON")
-            g.db.execute("PRAGMA journal_mode = WAL")
+            try:
+                g.db.execute("PRAGMA journal_mode = WAL")
+            except sqlite3.OperationalError:
+                pass
             g.db.execute("PRAGMA busy_timeout = 30000")
         return g.db
     else:
         conn = sqlite3.connect(
-            Config.DATABASE,
+            db_path,
             timeout=30.0,
             check_same_thread=False
         )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            pass
         conn.execute("PRAGMA busy_timeout = 30000")
         return conn
 
@@ -60,15 +91,27 @@ def execute_db(query, args=(), commit=True):
 
 def init_db():
     """Initializes schema and seeds baseline college data and demo accounts."""
-    db_dir = os.path.dirname(Config.DATABASE)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-    os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+    db_path = _get_active_db_path()
+    upload_folder = current_app.config['UPLOAD_FOLDER'] if (has_app_context() and 'UPLOAD_FOLDER' in current_app.config) else Config.UPLOAD_FOLDER
 
-    db = sqlite3.connect(Config.DATABASE, timeout=30.0, check_same_thread=False)
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except OSError:
+            pass
+    try:
+        os.makedirs(upload_folder, exist_ok=True)
+    except OSError:
+        pass
+
+    db = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
-    db.execute("PRAGMA journal_mode = WAL")
+    try:
+        db.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.OperationalError:
+        pass
     db.execute("PRAGMA busy_timeout = 30000")
     cursor = db.cursor()
 

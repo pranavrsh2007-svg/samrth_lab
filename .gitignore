@@ -13,3 +13,6 @@ venv/
 test_*.db
 *.db-shm
 *.db-wal
+uploads/
+.vercel/
+

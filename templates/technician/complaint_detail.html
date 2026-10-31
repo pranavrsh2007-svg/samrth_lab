@@ -87,8 +87,8 @@
         {% if complaint.attachment_filename %}
           <div class="mb-3">
             <div class="text-muted mb-1" style="font-size: 0.775rem; font-weight: 700; text-transform: uppercase;">Attachment</div>
-            <a href="{{ url_for('uploaded_file', filename=complaint.attachment_filename) }}" target="_blank">
-              <img src="{{ url_for('uploaded_file', filename=complaint.attachment_filename) }}" alt="Issue Screenshot" style="max-height: 240px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <a href="{{ complaint.attachment_filename | attachment_url }}" target="_blank">
+              <img src="{{ complaint.attachment_filename | attachment_url }}" alt="Issue Screenshot" style="max-height: 240px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
             </a>
           </div>
         {% endif %}

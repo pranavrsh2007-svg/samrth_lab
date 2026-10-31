@@ -15,12 +15,20 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Ensure upload directory exists
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    # Ensure upload directory exists safely without crashing if filesystem is read-only
+    upload_folder = app.config.get('UPLOAD_FOLDER')
+    if upload_folder:
+        try:
+            os.makedirs(upload_folder, exist_ok=True)
+        except OSError:
+            pass
 
     # Ensure database schema is initialized and seeded (for WSGI/Gunicorn and local runs)
     with app.app_context():
-        init_db()
+        try:
+            init_db()
+        except Exception as e:
+            app.logger.warning(f"Database initialization notice: {e}")
 
     # Register blueprints
     app.register_blueprint(auth_bp)
@@ -46,10 +54,24 @@ def create_app(config_class=Config):
                 return redirect(url_for('technician.dashboard'))
         return redirect(url_for('auth.login'))
 
-    # Serve uploaded images
-    @app.route('/uploads/<filename>')
+    # Serve uploaded images (supports local files and redirects for remote persistent storage)
+    @app.route('/uploads/<path:filename>')
     def uploaded_file(filename):
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        if filename.startswith('http://') or filename.startswith('https://'):
+            return redirect(filename)
+        if filename.startswith('http:/'):
+            return redirect(filename.replace('http:/', 'http://', 1))
+        if filename.startswith('https:/'):
+            return redirect(filename.replace('https:/', 'https://', 1))
+
+        upload_folder = app.config.get('UPLOAD_FOLDER')
+        if not upload_folder or not os.path.exists(os.path.join(upload_folder, filename)):
+            import tempfile
+            tmp_fallback = os.path.join(tempfile.gettempdir(), filename)
+            if os.path.exists(tmp_fallback):
+                return send_from_directory(tempfile.gettempdir(), filename)
+            return render_template('errors/404.html'), 404
+        return send_from_directory(upload_folder, filename)
 
     # Global context processor to make current_user and notifications available in all templates
     @app.context_processor
@@ -92,6 +114,14 @@ def create_app(config_class=Config):
             'Low': 'badge-info'
         }
         return mapping.get(priority, 'badge-light')
+
+    @app.template_filter('attachment_url')
+    def attachment_url_filter(filename_or_url):
+        if not filename_or_url:
+            return ''
+        if filename_or_url.startswith('http://') or filename_or_url.startswith('https://'):
+            return filename_or_url
+        return url_for('uploaded_file', filename=filename_or_url)
 
     # Error handlers
     @app.errorhandler(404)

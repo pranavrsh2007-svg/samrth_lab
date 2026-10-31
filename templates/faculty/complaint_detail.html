@@ -100,8 +100,8 @@
           <div>
             <div class="text-muted mb-1" style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Attached Screenshot</div>
             <div class="p-2 border rounded" style="background: var(--bg-surface-secondary); display: inline-block;">
-              <a href="{{ url_for('uploaded_file', filename=complaint.attachment_filename) }}" target="_blank">
-                <img src="{{ url_for('uploaded_file', filename=complaint.attachment_filename) }}" alt="Malfunction Screenshot" style="max-height: 250px; border-radius: var(--radius-sm); object-fit: contain;">
+              <a href="{{ complaint.attachment_filename | attachment_url }}" target="_blank">
+                <img src="{{ complaint.attachment_filename | attachment_url }}" alt="Malfunction Screenshot" style="max-height: 250px; border-radius: var(--radius-sm); object-fit: contain;">
               </a>
             </div>
           </div>

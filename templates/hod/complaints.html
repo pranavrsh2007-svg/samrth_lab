@@ -210,7 +210,11 @@
     const attachBox = document.getElementById('m-attachment-box');
     const attachImg = document.getElementById('m-attachment-img');
     if (c.attachment_filename) {
-      attachImg.src = `/uploads/${c.attachment_filename}`;
+      if (c.attachment_filename.startsWith('http://') || c.attachment_filename.startsWith('https://')) {
+        attachImg.src = c.attachment_filename;
+      } else {
+        attachImg.src = `/uploads/${c.attachment_filename}`;
+      }
       attachBox.style.display = 'block';
     } else {
       attachBox.style.display = 'none';

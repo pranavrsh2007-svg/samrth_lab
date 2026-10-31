@@ -76,12 +76,12 @@ def report_fault():
             file = request.files['attachment']
             if file and file.filename != '':
                 if allowed_file(file.filename):
-                    ext = file.filename.rsplit('.', 1)[1].lower()
-                    unique_name = f"fault_{uuid.uuid4().hex[:12]}.{ext}"
-                    os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
-                    upload_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_name)
-                    file.save(upload_path)
-                    attachment_filename = unique_name
+                    from services.storage_service import save_uploaded_file
+                    saved_ref = save_uploaded_file(file)
+                    if saved_ref:
+                        attachment_filename = saved_ref
+                    else:
+                        flash('Failed to save attachment. Continuing with report submission.', 'warning')
                 else:
                     flash('Invalid file format. Allowed formats: PNG, JPG, JPEG, WEBP, GIF.', 'warning')
 
